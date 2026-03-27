@@ -104,17 +104,23 @@ int samplesCollected = 0;
 void fetchIP();
 
 void fetchIP() {
-  byte connection = 1;
-  connection = Ethernet.begin(mymac);
-  
-  Serial.print(F("\nW5100 Revision "));
-  if (connection == 0) {
-    Serial.println(F("Failed to access Ethernet controller"));
+  Serial.println(F("Setting up DHCP..."));
+  lcd.clear();
+  lcd.print(F("Connecting..."));
+
+  if (Ethernet.begin(mymac) == 0) {
+    Serial.println(F("DHCP failed — no Ethernet"));
+    lcd.clear();
+    lcd.print(F("Ethernet failed"));
+    return;
   }
-  
-  Serial.println(F("Setting up DHCP"));
-  Serial.print("Connected with IP: ");
+
+  Serial.print(F("Connected with IP: "));
   Serial.println(Ethernet.localIP());
+  lcd.clear();
+  lcd.print(F("IP:"));
+  lcd.setCursor(0, 1);
+  lcd.print(Ethernet.localIP());
   delay(1500);
 }
 
@@ -139,8 +145,9 @@ float updateAverage(float newValue) {
 }
 
 void setup() {
+  Serial.begin(9600);
   pinMode(signalPin, INPUT);
-  lcd.begin(16, 2);
+  lcd.begin(20, 4);
 
   // Take first real reading to pre-fill buffer, avoiding cold-start bias
   unsigned long highTime, lowTime;
@@ -182,6 +189,11 @@ void loop() {
     lcd.setCursor(0, 1);
     lcd.print("                ");
   }
+
+  lcd.setCursor(0, 2);
+  lcd.print("IP: ");
+  lcd.print(Ethernet.localIP());
+  
 
   delay(200);
 }
