@@ -193,7 +193,6 @@ void loop() {
   lcd.setCursor(0, 2);
   lcd.print("IP: ");
   lcd.print(Ethernet.localIP());
-  
 
   delay(200);
 }
