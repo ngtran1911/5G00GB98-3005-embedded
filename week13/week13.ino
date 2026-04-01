@@ -37,17 +37,22 @@ void setup() {
   lcd.clear();
 
   pinMode(buttonPIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(buttonPIN), pulseISR, FALLING);
-
-  Timer1.initialize(1000000); 
-  Timer1.attachInterrupt(timerISR);
+  attachInterrupt(digitalPinToInterrupt(buttonPIN), pulseISR, FALLING); // (interrupt num : int, ISR, mode)
+                                                                        //ISR:the ISR to call when the interrupt occurs; this function must take no parameters and return nothing
+                                                                        //mode : define when the interrupt shouuld be triggered 
+                                                                        //LOW to trigger the interrupt whenever the pin is low,
+                                                                        //CHANGE to trigger the interrupt whenever the pin changes value
+                                                                        //RISING to trigger when the pin goes from low to high,
+                                                                        //FALLING for when the pin goes from high to low.
+  Timer1.initialize(1000000); // sets the timer period to 1 second (1,000,000 microseconds)
+  Timer1.attachInterrupt(timerISR); //when 1 second is up, call timerISR
 }
 
 void loop() {
 
-    lcd.setCursor(0, 2);
+    lcd.setCursor(0, 2);// (column, row)
     lcd.print("Duration: ");
-    lcd.print((float)pulseDurationUs / 1000.0, 1);
+    lcd.print((float)pulseDurationUs / 1000.0,1);
     lcd.print(" ms");
 
     lcd.setCursor(0, 0);
@@ -335,29 +340,31 @@ float humidityFromFrequency(float freq) {
 }
 
 float updateAverage(float newValue) {
-  total -= readings[readIndex];
-  readings[readIndex] = newValue;
-  total += newValue;
-  readIndex = (readIndex + 1) % NUM_READINGS;
+  total -= readings[readIndex];// remove the old value from the array 
+  readings[readIndex] = newValue; // replace old with new
+  total += newValue;//add new value to the total
+  readIndex = (readIndex + 1) % NUM_READINGS;// readIndex never exceed 9
   if (samplesCollected < NUM_READINGS) samplesCollected++;
   return total / samplesCollected;
 }
 
 void setup() {
-  Serial.begin(9600);
-  pinMode(signalPin, INPUT);
+  Serial.begin(9600); //9600 bits per seconds : speed of communicationre
+  pinMode(signalPin, INPUT);// receive signal
   lcd.begin(20, 4);
 
   // Take first real reading to pre-fill buffer, avoiding cold-start bias
-  unsigned long highTime, lowTime;
+  unsigned long highTime, lowTime; // var to store time measure 
   do {
     highTime = pulseIn(signalPin, HIGH, 50000); // timeout 50,000 µs = 50 ms
     lowTime  = pulseIn(signalPin, LOW,  50000); // measures full period together
-  } while (highTime == 0 || lowTime == 0);
+  } while (highTime == 0 || lowTime == 0); //repeated until find out high time or lowTime # 0
+                                            //got a real signal! → stop
 
   float initHumidity = humidityFromFrequency(1000000.0 / (highTime + lowTime));
-  for (int i = 0; i < NUM_READINGS; i++) readings[i] = initHumidity;
-  total = initHumidity * NUM_READINGS;
+  for (int i = 0; i < NUM_READINGS; i++){
+    readings[i] = initHumidity;}
+  total = initHumidity * NUM_READINGS; // for calc the average 
   samplesCollected = NUM_READINGS;
 
   lcd.print("Stabilizing...");
@@ -414,7 +421,7 @@ void handleTemperature() {
 
 void loop() {
   unsigned long highTime = pulseIn(signalPin, HIGH, 50000); // timeout 50,000 µs = 50 ms
-  unsigned long lowTime  = pulseIn(signalPin, LOW,  50000);
+  unsigned long lowTime  = pulseIn(signalPin, LOW,  50000);// pulseIn measure how long a pulse last on a pin
 
   if (highTime > 0 && lowTime > 0) {
     // pulseIn returns microseconds; sum is the full period.
@@ -435,9 +442,9 @@ void loop() {
 
   lcd.setCursor(0, 2);
   lcd.print("IP: ");
-  lcd.print(Ethernet.localIP());
+  lcd.print(Ethernet.localIP());// Adruino connects to the network by purple cable in class and get an IP address
 
   send_MQTT_message(); 
   handleTemperature();
-  delay(5000);
+  delay(5000); // run every 5s,wait 5s then repeat
 }
