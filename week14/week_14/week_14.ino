@@ -13,14 +13,18 @@ EthernetClient ethClient;
 PubSubClient   mqtt(mqttIP, 1883, ethClient);
 
 // ── PINS ──────────────────────────────────────────────────────────────────────
-const int HUMID_PIN  = 3;   // humidity sensor (frequency output)
+const int HUMID_PIN  = 3;   // (D3) humidity sensor (frequency output)
 const int BUTTON_PIN = 2;   // mode-select button (INPUT_PULLUP, polled)
 LiquidCrystal lcd(4, 5, 6, 7, 8, 9);
 
 // ── SEND MODE ─────────────────────────────────────────────────────────────────
 // 0 = temperature only | 1 = humidity only | 2 = both
 uint8_t sendMode = 0;
-const char* modeNames[] = { "Temp only", "Humid only", "Temp+Humid" };
+const char* modeNames[] = { "Temp", "Humidity", "Both" };
+
+// Custom LCD characters
+byte degreeChar[8] = { 0x06, 0x09, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00 };
+byte dropChar[8]   = { 0x04, 0x04, 0x0A, 0x0A, 0x11, 0x11, 0x11, 0x0E };
 
 // ── HUMIDITY AVERAGING (10-element circular buffer) ───────────────────────────
 const int NUM_READINGS    = 10;
@@ -42,6 +46,7 @@ void checkButton() {
 
   // Detect falling edge: was HIGH, now LOW → button just pressed
   if (lastState == HIGH && currentState == LOW) {
+    Serial.print("Button pressed");
     unsigned long now = millis();
     if (now - lastPress > 200) {        // ignore bounces within 200 ms
       sendMode = (sendMode + 1) % 3;    // cycle 0 → 1 → 2 → 0
@@ -62,7 +67,7 @@ float humidityFromFreq(float freq) {
   return constrain(-0.06f * freq + 514.0f, 0.0f, 100.0f);
 }
 
-// Sliding average: subtract the oldest reading, add the new one, return average.
+// Sliding average: subtract the oldest reading, add the new one, return average.  
 float updateAverage(float newVal) {
   bufTotal -= readings[readIndex];
   readings[readIndex] = newVal;
@@ -143,7 +148,7 @@ char* format_sensor_data(float humidity, float temperature, int dataOption) {
         snprintf(
           result, 
           sizeof(result),
-          "IOTJS={\"S_humidity_name\":\"SC_humidity\",\"S_humidity_value\":%s}\n",
+          "IOTJS={\"S_humidity_name\":\"SC_humidity\",\"S_humidity_value\":%s}",
           humidityStr
         );
     } else {
@@ -172,51 +177,90 @@ void send_MQTT_message(char* message) {
   }
 }
 
-void updateDisplay(float temp, float humidity) {
-  lcd.setCursor(0, 0);
-  lcd.print("Send: ");
-  lcd.print(modeNames[sendMode]);
+void printTemp(float temp, int row) {
+  char line[21];
+  char tStr[8];
+  dtostrf(temp, 5, 1, tStr);
+  snprintf(line, sizeof(line), " T: %s", tStr);
+  lcd.setCursor(0, row);
+  lcd.print(line);
+  lcd.write(byte(0)); // degree symbol
+  lcd.print("C          ");
+}
 
-  lcd.setCursor(0, 1);
+void printHumid(float humidity, int row) {
+  char line[21];
+  lcd.setCursor(0, row);
+  lcd.write(byte(1)); // droplet symbol
   if (humidity >= 0) {
-    lcd.print("RH:   ");
-    lcd.print(humidity, 1);
-    lcd.print(" %   ");
+    char rhStr[8];
+    dtostrf(humidity, 5, 1, rhStr);
+    snprintf(line, sizeof(line), "H: %s %%           ", rhStr);
   } else {
-    lcd.print("RH:   no signal ");
+    snprintf(line, sizeof(line), "H: --.- %%          ");
+  }
+  lcd.print(line);
+}
+
+void updateDisplay(float temp, float humidity) {
+  char line[21];
+
+  // Row 0: mode selector with arrows
+  unsigned long elapsed = millis() - lastSendTime;
+  unsigned long remaining = (elapsed >= SEND_INTERVAL) ? 0 : (SEND_INTERVAL - elapsed) / 1000;
+  snprintf(line, sizeof(line), "<%s> Send in:%3lus ", modeNames[sendMode], remaining);
+  lcd.setCursor(0, 0);
+  lcd.print(line);
+
+  // Row 1: primary data
+  if (sendMode == 0) {
+    printTemp(temp, 1);
+  } else if (sendMode == 1) {
+    printHumid(humidity, 1);
+  } else {
+    printTemp(temp, 1);
   }
 
-  lcd.setCursor(0, 2);
-  lcd.print("IP: ");
-  lcd.print(Ethernet.localIP());
+  // Row 2: second data (both mode only)
+  if (sendMode == 2) {
+    printHumid(humidity, 2);
+  } else {
+    lcd.setCursor(0, 2);
+    lcd.print("                    ");
+  }
 
+  // Row 3: IP with divider
   lcd.setCursor(0, 3);
-  lcd.print("Temp: ");
-  lcd.print(temp, 1);
-  lcd.print(" C   ");
+  lcd.print("----IP:");
+  lcd.print(Ethernet.localIP());
+  lcd.print("  ");
 }
 
 void setup() {
 
   Serial.begin(9600);
   lcd.begin(20, 4);
-  // pinMode(HUMID_PIN,  INPUT);
-  // pinMode(BUTTON_PIN, INPUT_PULLUP); // pin 2: polled in loop, not interrupt
+  lcd.createChar(0, degreeChar);
+  lcd.createChar(1, dropChar);
+  pinMode(HUMID_PIN,  INPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP); // pin 2: polled in loop, not interrupt
   
   
   // Block until we get a valid humidity signal, then pre-fill the buffer
   // so the first displayed value is already averaged (not zero).
   Serial.print("waiting signal...");
-  unsigned long hi, lo;
-  // do {
-  //   hi = pulseIn(HUMID_PIN, HIGH, 50000);
-  //   lo = pulseIn(HUMID_PIN, LOW,  50000);
-  // } while (hi == 0 || lo == 0);
+  unsigned long hi, lo; 
+  do {
+    hi = pulseIn(HUMID_PIN, HIGH, 50000);
+    lo = pulseIn(HUMID_PIN, LOW,  50000);
+  } while (hi == 0 || lo == 0);
 
-  // float initRH = humidityFromFreq(1000000.0f / (hi + lo));
-  // for (int i = 0; i < NUM_READINGS; i++) readings[i] = initRH;
-  // bufTotal         = initRH * NUM_READINGS;
-  // samplesCollected = NUM_READINGS;
+  float initRH = humidityFromFreq(1000000.0f / (hi + lo));
+  for (int i = 0; i < NUM_READINGS; i++) {
+    readings[i] = initRH;
+  }
+  bufTotal         = initRH * NUM_READINGS;
+  samplesCollected = NUM_READINGS;
 
  
   lcd.print("Stabilizing...");
@@ -242,6 +286,5 @@ void loop() {
     sendMQTT(temp, humidity);
   }
 
-  mqtt.loop(); // must be called regularly to keep the MQTT connection alive
-  delay(5000);
+  mqtt.loop();
 }
