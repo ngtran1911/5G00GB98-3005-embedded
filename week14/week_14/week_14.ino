@@ -20,7 +20,7 @@ LiquidCrystal lcd(4, 5, 6, 7, 8, 9);
 // ── SEND MODE ─────────────────────────────────────────────────────────────────
 // 0 = temperature only | 1 = humidity only | 2 = both
 uint8_t sendMode = 0;
-const char* modeNames[] = { "Temp", "Humidity", "Both" };
+const char* modeLabels[] = { "TEMP", "HUMID", "BOTH" };
 
 // Custom LCD characters
 byte degreeChar[8] = { 0x06, 0x09, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00 };
@@ -177,61 +177,63 @@ void send_MQTT_message(char* message) {
   }
 }
 
-void printTemp(float temp, int row) {
-  char line[21];
-  char tStr[8];
-  dtostrf(temp, 5, 1, tStr);
-  snprintf(line, sizeof(line), " T: %s", tStr);
+void printRow(int row, const char* text) {
+  char buf[21];
+  snprintf(buf, sizeof(buf), "%-20s", text);
   lcd.setCursor(0, row);
-  lcd.print(line);
-  lcd.write(byte(0)); // degree symbol
-  lcd.print("C          ");
-}
-
-void printHumid(float humidity, int row) {
-  char line[21];
-  lcd.setCursor(0, row);
-  lcd.write(byte(1)); // droplet symbol
-  if (humidity >= 0) {
-    char rhStr[8];
-    dtostrf(humidity, 5, 1, rhStr);
-    snprintf(line, sizeof(line), "H: %s %%           ", rhStr);
-  } else {
-    snprintf(line, sizeof(line), "H: --.- %%          ");
-  }
-  lcd.print(line);
+  lcd.print(buf);
 }
 
 void updateDisplay(float temp, float humidity) {
   char line[21];
+  char val1[8], val2[8];
 
-  // Row 0: mode selector with arrows
+  // Row 0: mode + countdown
+  //         col: 01234567890123456789
+  //              Mode : BOTH   [42s]
   unsigned long elapsed = millis() - lastSendTime;
-  unsigned long remaining = (elapsed >= SEND_INTERVAL) ? 0 : (SEND_INTERVAL - elapsed) / 1000;
-  snprintf(line, sizeof(line), "<%s> Send in:%3lus ", modeNames[sendMode], remaining);
-  lcd.setCursor(0, 0);
-  lcd.print(line);
+  int secs = (elapsed >= SEND_INTERVAL) ? 0 : (SEND_INTERVAL - elapsed) / 1000;
+  snprintf(line, 21, "Mode : %-5s  [%2ds]", modeLabels[sendMode], secs);
+  printRow(0, line);
 
-  // Row 1: primary data
-  if (sendMode == 0) {
-    printTemp(temp, 1);
-  } else if (sendMode == 1) {
-    printHumid(humidity, 1);
+  // Row 1: primary sensor
+  //         col: 01234567890123456789
+  //              Temp :  23.5 *C
+  //              Humid:  45.2 %
+  if (sendMode == 0 || sendMode == 2) {
+    dtostrf(temp, 5, 1, val1);
+    lcd.setCursor(0, 1);
+    lcd.print("Temp : ");
+    lcd.print(val1);
+    lcd.write(byte(0));
+    lcd.print("C       ");
   } else {
-    printTemp(temp, 1);
+    if (humidity >= 0) {
+      dtostrf(humidity, 5, 1, val1);
+      snprintf(line, 21, "Humid: %s %%", val1);
+    } else {
+      snprintf(line, 21, "Humid:  --.- %%");
+    }
+    printRow(1, line);
   }
 
-  // Row 2: second data (both mode only)
+  // Row 2: second sensor (both) or blank
   if (sendMode == 2) {
-    printHumid(humidity, 2);
+    if (humidity >= 0) {
+      dtostrf(humidity, 5, 1, val1);
+      snprintf(line, 21, "Humid: %s %%", val1);
+    } else {
+      snprintf(line, 21, "Humid:  --.- %%");
+    }
+    printRow(2, line);
   } else {
-    lcd.setCursor(0, 2);
-    lcd.print("                    ");
+    printRow(2, "");
   }
 
-  // Row 3: IP with divider
+  // Row 3: IP
+  snprintf(line, 21, "IP   : ");
   lcd.setCursor(0, 3);
-  lcd.print("----IP:");
+  lcd.print(line);
   lcd.print(Ethernet.localIP());
   lcd.print("  ");
 }
