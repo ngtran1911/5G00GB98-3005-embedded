@@ -54,19 +54,21 @@ float updateAverage(float newVal) {
   return bufTotal / samplesCollected;
 }
 
+
 float readHumidity() {
   unsigned long hi = pulseIn(HUMID_PIN, HIGH, 50000);
   unsigned long lo = pulseIn(HUMID_PIN, LOW,  50000);
   if (hi == 0 || lo == 0) return -1.0f;
   // freq = 1s / period(µs), period = high pulse + low pulse
   return updateAverage(humidityFromFreq(1000000.0f / (hi + lo)));
+
 }
 
 void prefillHumidityBuffer() {
   Serial.print(F("Waiting for humidity sensor..."));
   unsigned long hi, lo;
   do {
-    hi = pulseIn(HUMID_PIN, HIGH, 50000);
+    hi = pulseIn  (HUMID_PIN, HIGH, 50000);
     lo = pulseIn(HUMID_PIN, LOW,  50000);
   } while (hi == 0 || lo == 0);
 
@@ -131,18 +133,13 @@ char* formatPayload(float temp, float humidity) {
 
   if (sendMode == 0) {
     snprintf(result, sizeof(result),
-      "IOTJS={\"S_temperature_name\":\"SC_temperature\","
-      "\"S_temperature_value\":%s}", tStr);
+      "{\"shortcircuit\":\"1\",\"data\":{\"temperature\":\"%s\"}}", tStr);
   } else if (sendMode == 1) {
     snprintf(result, sizeof(result),
-      "IOTJS={\"S_humidity_name\":\"SC_humidity\","
-      "\"S_humidity_value\":%s}", hStr);
+      "{\"shortcircuit\":\"1\",\"data\":{\"humidity_in\":\"%s\"}}", hStr);
   } else {
     snprintf(result, sizeof(result),
-      "IOTJS={\"S_humidity_name\":\"SC_humidity\","
-      "\"S_humidity_value\":%s,"
-      "\"S_temperature_name\":\"SC_temperature\","
-      "\"S_temperature_value\":%s}", hStr, tStr);
+      "{\"device_id\":\"1\",\"data\":{\"temperature\":\"%s\",\"humidity_in\":\"%s\"}}", tStr, hStr);
   }
   return result;
 }
@@ -246,6 +243,8 @@ void loop() {
 
   if (millis() - lastSendTime >= SEND_INTERVAL) {
     lastSendTime = millis();
+    Serial.print("SEND TIME: ");       // ADD THIS
+    Serial.println(lastSendTime); 
     sendMQTT(temp, humidity);
   }
 

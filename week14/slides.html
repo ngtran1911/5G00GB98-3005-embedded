@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Week 14 - Hardware Overview</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 40px;
+        }
+        .slide {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 60px;
+            max-width: 1100px;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        h1 {
+            text-align: center;
+            color: #e94560;
+            font-size: 28px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e94560;
+            padding-bottom: 12px;
+        }
+        h2 {
+            color: #e94560;
+            font-size: 20px;
+            margin-top: 30px;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        th {
+            background: #e94560;
+            color: white;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        td {
+            padding: 9px 12px;
+            border-bottom: 1px solid #2a3a5c;
+        }
+        tr:nth-child(even) {
+            background: #1a2744;
+        }
+        code {
+            background: #0f3460;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .modes {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        .mode-box {
+            background: #0f3460;
+            border: 2px solid #e94560;
+            border-radius: 8px;
+            padding: 14px 24px;
+            text-align: center;
+            min-width: 140px;
+        }
+        .mode-box strong {
+            color: #e94560;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .note {
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        .func {
+            background: #0f3460;
+            border-left: 4px solid #e94560;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin-bottom: 18px;
+        }
+        .func h2 {
+            margin: 0 0 6px 0;
+            font-size: 18px;
+        }
+        .func .purpose {
+            color: #aaa;
+            font-style: italic;
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+        .func .how {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="slide">
+        <h1>Slide 1: System Block Diagram</h1>
+        <div class="mermaid">
+flowchart LR
+    subgraph INPUTS["Inputs"]
+        LM35["LM35 Temp\nA0"]
+        HUMID["Humidity Sensor\nD3"]
+        BTN["Button\nD2"]
+    end
+
+    subgraph MCU["Arduino Uno - ATmega328P"]
+        PROC["Processing\nRead sensors\nDebounce button\nFormat JSON"]
+    end
+
+    subgraph OUTPUTS["Outputs"]
+        LCD["20x4 LCD\nD4-D9"]
+        ETH["W5100 Ethernet\nSPI D10-D13"]
+    end
+
+    MQTT["MQTT Broker\n10.6.0.23:1883"]
+
+    LM35 --> PROC
+    HUMID --> PROC
+    BTN --> PROC
+    PROC --> LCD
+    PROC --> ETH
+    ETH --> MQTT
+        </div>
+        <div class="note">Sensors and button feed into the Arduino, which displays data on LCD and publishes to MQTT via Ethernet</div>
+    </div>
+
+    <div class="slide">
+        <h1>Slide 2: Hardware Details</h1>
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>Pin(s)</th>
+                <th>Purpose</th>
+                <th>How it works</th>
+            </tr>
+            <tr>
+                <td><strong>Arduino Uno</strong><br>ATmega328P</td>
+                <td>—</td>
+                <td>Central controller</td>
+                <td>Main loop: reads sensors, drives display and network</td>
+            </tr>
+            <tr>
+                <td><strong>LM35</strong><br>Temp sensor</td>
+                <td>A0</td>
+                <td>Measure temperature</td>
+                <td>Analog 10mV/°C &rarr; <code>°C = ADC × 5 / 10.24</code></td>
+            </tr>
+            <tr>
+                <td><strong>Humidity Sensor</strong><br>Freq output</td>
+                <td>D3</td>
+                <td>Measure relative humidity</td>
+                <td>Square wave &rarr; <code>RH% = -0.06 × Hz + 514</code></td>
+            </tr>
+            <tr>
+                <td><strong>Push Button</strong></td>
+                <td>D2</td>
+                <td>Cycle send mode</td>
+                <td>INPUT_PULLUP, falling edge, 200ms debounce</td>
+            </tr>
+            <tr>
+                <td><strong>20×4 LCD</strong></td>
+                <td>D4-D9</td>
+                <td>Display status</td>
+                <td>4-bit parallel, shows mode + data + IP + countdown</td>
+            </tr>
+            <tr>
+                <td><strong>W5100 Ethernet</strong></td>
+                <td>D10-D13 (SPI)</td>
+                <td>Network</td>
+                <td>DHCP for IP, TCP to MQTT broker</td>
+            </tr>
+            <tr>
+                <td><strong>MQTT Broker</strong></td>
+                <td>—</td>
+                <td>Receive data</td>
+                <td>JSON to topic <code>ICT4_out_2020</code> every 5s</td>
+            </tr>
+        </table>
+
+        <h2>Send Modes (button cycles)</h2>
+        <div class="modes">
+            <div class="mode-box">
+                <strong>TEMP</strong>
+                Temperature JSON only
+            </div>
+            <div class="mode-box">
+                <strong>HUMID</strong>
+                Humidity JSON only
+            </div>
+            <div class="mode-box">
+                <strong>BOTH</strong>
+                Both in one JSON
+            </div>
+        </div>
+    </div>
+
+    <div class="slide">
+        <h1>Slide 3: Key Functions (1/2)</h1>
+
+        <div class="func">
+            <h2>1. checkButton()</h2>
+            <p class="purpose">Reads button input, detects press, cycles send mode</p>
+            <div class="how">
+                <strong>How:</strong> Polls pin D2 each loop. Detects <em>falling edge</em> (HIGH&rarr;LOW transition).
+                Ignores bounces within 200ms using a timestamp check. On valid press, cycles
+                <code>sendMode</code> through 0&rarr;1&rarr;2&rarr;0 and resets the send timer so the
+                countdown restarts from the new mode.
+            </div>
+        </div>
+
+        <div class="func">
+            <h2>2. readHumidity()</h2>
+            <p class="purpose">Measures humidity sensor signal and returns averaged RH%</p>
+            <div class="how">
+                <strong>How:</strong> Uses <code>pulseIn()</code> to measure the HIGH and LOW duration of the
+                sensor's square wave (50ms timeout). Calculates frequency from the period:
+                <code>freq = 1,000,000 / (hi + lo)</code>. Converts to RH% using the datasheet formula
+                <code>RH = -0.06 &times; freq + 514</code>, then passes through the sliding average.
+                Returns -1 if no signal detected.
+            </div>
+        </div>
+
+        <div class="func">
+            <h2>3. updateAverage()</h2>
+            <p class="purpose">Smooths noisy sensor readings using a 10-element circular buffer</p>
+            <div class="how">
+                <strong>How:</strong> Maintains a fixed-size array of 10 readings. Each call: subtracts the
+                oldest value from the running total, overwrites it with the new value, adds the new value
+                to the total, and advances the index with wraparound
+                (<code>readIndex = (readIndex + 1) % 10</code>). Returns <code>total / count</code>.
+                This avoids recalculating the sum every time &mdash; O(1) per update.
+            </div>
+        </div>
+    </div>
+
+    <div class="slide">
+        <h1>Slide 4: Key Functions (2/2)</h1>
+
+        <div class="func">
+            <h2>4. prefillHumidityBuffer()</h2>
+            <p class="purpose">Blocks at startup until the humidity sensor responds, then initializes the buffer</p>
+            <div class="how">
+                <strong>How:</strong> Runs a <code>do-while</code> loop calling <code>pulseIn()</code>
+                until both HIGH and LOW pulses are detected. Takes the first valid reading and fills
+                all 10 buffer slots with it. Without this, the average would start at 0% and slowly
+                climb to the real value over 10 readings &mdash; giving wrong data for the first few seconds.
+            </div>
+        </div>
+
+        <div class="func">
+            <h2>5. updateDisplay()</h2>
+            <p class="purpose">Renders sensor data, mode, and countdown on the 20&times;4 LCD</p>
+            <div class="how">
+                <strong>How:</strong> Only called every 500ms (or immediately on mode change) to prevent
+                flicker. Row 0 shows the current mode and seconds until next MQTT send. Rows 1-2 show
+                sensor data based on <code>sendMode</code> &mdash; only the data being published is displayed.
+                Row 3 shows the IP address. All lines are padded to 20 characters to overwrite old text.
+            </div>
+        </div>
+
+        <div class="func">
+            <h2>6. sendMQTT()</h2>
+            <p class="purpose">Formats sensor data as JSON and publishes to the MQTT broker</p>
+            <div class="how">
+                <strong>How:</strong> First checks if the MQTT connection is alive; reconnects if needed.
+                Calls <code>formatPayload()</code> which uses <code>dtostrf()</code> to convert floats
+                to strings and <code>snprintf()</code> to build a JSON string. The JSON structure changes
+                based on <code>sendMode</code>: temperature only, humidity only, or both.
+                Publishes to topic <code>ICT4_out_2020</code>.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            flowchart: { curve: 'basis' }
+        });
+    </script>
+</body>
+</html>
